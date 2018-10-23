@@ -1,27 +1,22 @@
 import bisect
-
+import queue
+from collections import deque
 
 class BTreeNode(object):
-    """A B-Tree Node.
-
-    attributes
-    =====================
-    leaf : boolean, determines whether this node is a leaf.
-    keys : list, a list of keys internal to this node
-    c : list, a list of children of this node
-    """
 
     def __init__(self, leaf=False):
         self.leaf = leaf
         self.keys = []
         self.c = []
+        self.p = []
 
     def __str__(self):
         if self.leaf:
-            return "Leaf {0} keys\n\tK:{1}\n\tC:{2}\n".format(len(self.keys), self.keys, self.c)
+            return "Leaf K:{0}".format(self.keys)
+            #return "Leaf {0} keys\n\tK:{1}\n\tC:{2}\n".format(len(self.keys), self.keys, self.c)
         else:
-            return "Internal {0} keys, {1} children\n\tK:{2}\n\n".format(len(self.keys), len(self.c),
-                                                                                        self.keys, self.c)
+            return "Internal K:{0}".format(self.keys)
+            #return "Internal {0} keys, {1} children\n\tK:{2}\n\n".format(len(self.keys), len(self.c), self.keys, self.c)
 
 
 class BTree(object):
@@ -30,14 +25,7 @@ class BTree(object):
         self.t = t
 
     def search(self, k, x=None):
-        """Search the B-Tree for the key k.
 
-        args
-        =====================
-        k : Key to search for
-        x : (optional) Node at which to begin search. Can be None, in which case the entire tree is searched.
-
-        """
         if isinstance(x, BTreeNode):
             i = 0
             while i < len(x.keys) and k > x.keys[i]:  # look for index of k
@@ -82,28 +70,44 @@ class BTree(object):
                     i += 1
             self._insert_nonfull(x.c[i], k)
 
-    def _split_child(self, x, i):
+    def _split_child(self, nodo_padre, pos_hijo):
+        # Obtengo la posicion central (medio)
         medio = (self.t - 1)//2
-        y = x.c[i]
-        z = BTreeNode(leaf=y.leaf)
+        # Nodo que quiero partir
+        nodo_hijo = nodo_padre.c[pos_hijo]
+        # Nuevo nodo (sibling) que sera hoja si el nodo a partir era hoja
+        nuevo_nodo = BTreeNode(leaf=nodo_hijo.leaf)
 
-        # slide all children of x to the right and insert z at i+1.
-        x.c.insert(i + 1, z)
-        x.keys.insert(i, y.keys[medio])
+        # Agrego el nodo "sibling" como hijo del padre
+        nodo_padre.c.insert(pos_hijo + 1, nuevo_nodo)
+        # Al partir el elemendo "medio" del nodo, pasa a ser la clave del padre.
+        nodo_padre.keys.insert(pos_hijo, nodo_hijo.keys[medio])
 
-        # keys of z are t to 2t - 1,
-        # y is then 0 to t-2
-        z.keys = y.keys[medio:]
-        y.keys = y.keys[0:medio]
+        # El hermano derecho, se queda con los elementos "derechos"
+        nuevo_nodo.keys = nodo_hijo.keys[medio:]
+        # El hermano izquierdo, se queda con los elementos "izquierdo"
+        nodo_hijo.keys = nodo_hijo.keys[0:medio]
 
         # children of z are t to 2t els of y.c
-        if not y.leaf:
-            z.c = y.c[medio:]
-            y.c = y.c[0:medio]
+        if not nodo_hijo.leaf:
+            nuevo_nodo.c = nodo_hijo.c[medio:]
+            nodo_hijo.c = nodo_hijo.c[0:medio]
 
     def __str__(self):
         r = self.root
-        return r.__str__() + '\n'.join([child.__str__() for child in r.c])
+        output = ""
+        open_set = deque()
+        open_set.append(r)
+
+        while open_set:
+            subtree_root = open_set.popleft()
+            output = subtree_root.__str__() + "\n"
+            for child in subtree_root.c:
+                output = output + " - " + child.__str__()
+                if not child.leaf:
+                    open_set.append(child)
+
+        return output
 
 
 if __name__ == '__main__':
