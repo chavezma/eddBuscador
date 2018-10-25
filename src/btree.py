@@ -90,7 +90,7 @@ class BTree(object):
 
         self._split_interno(el_padre, len(el_padre.hijos) - 1)
 
-        if len(el_padre.claves) == self.orden - 1:
+        if len(el_padre.claves) == self.orden:
             self._grow(el_padre)
 
     def _split_interno(self, padre, pos_hijo):
@@ -118,7 +118,7 @@ class BTree(object):
             for hijo in nuevo_nodo.hijos:
                 hijo.padre = nuevo_nodo
 
-            nodo_hijo.hijos = nodo_hijo.hijos[0:medio]
+            nodo_hijo.hijos = nodo_hijo.hijos[0:medio+1]
             for hijo in nodo_hijo.hijos:
                 hijo.padre = nodo_hijo
 
@@ -145,7 +145,12 @@ class BTree(object):
 
         if not nodo_hijo.es_hoja:
             nuevo_nodo.hijos = nodo_hijo.hijos[medio:]
+            for hijo in nuevo_nodo.hijos:
+                hijo.padre = nuevo_nodo
+
             nodo_hijo.hijos = nodo_hijo.hijos[0:medio]
+            for hijo in nodo_hijo.hijos:
+                hijo.padre = nodo_hijo
 
     def _insert_nonfull(self, x, k):
         i = len(x.claves) - 1
@@ -246,7 +251,7 @@ if __name__ == '__main__':
 
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad"
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para juegos"
-    palabras = "Bienvenidos al creador de palabras aleatorias en español"
+    palabras = "Bienvenidos al creador de palabras aleatorias en español con el puedes crear azar"
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para juegos con niños, por ejemplo, una persona puede generar una palabra sin que otras la vean, hace un dibujo y las otras personas tienen que adivinar cuál es la palabra."
     print("insertando elementos....")
 
