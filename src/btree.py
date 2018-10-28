@@ -1,3 +1,6 @@
+import sys
+import string
+import unicodedata
 import bisect
 import queue
 from collections import deque
@@ -24,7 +27,7 @@ class BTree(object):
         self.root = BTreeNode(es_hoja=True)
         self.orden = orden
 
-    def path_to(self, k, el_nodo=None):
+    def path_to(self, k, el_nodo=None, idx_padre=0):
         # Si especifico un nodo arranco a buscar desde ahi.
         if isinstance(el_nodo, BTreeNode):
             idx = 0
@@ -35,20 +38,19 @@ class BTree(object):
             if idx < len(el_nodo.claves) and k == el_nodo.claves[idx]:
                 # Si encontre la clave, es repetido.
                 # Si el i >= 0 entonces seria un elemento duplicado
-                return el_nodo, idx
+                return True, el_nodo, idx_padre
             elif el_nodo.es_hoja:
                 # Si recorrio todo el nodo y es una hoja, estoy en el nodo donde deberia ir la clave.
-                return el_nodo, -1
+                return False, el_nodo, idx_padre
             else:  # No lo encontre, y no es una hoja, entonces sigo mirando la rama correspondiente
-                return self.path_to(k, el_nodo.hijos[idx])
+                return self.path_to(k, el_nodo.hijos[idx], idx)
         else:  # no node provided, search root of tree
-            return self.path_to(k, self.root)
+            return self.path_to(k, self.root, 0)
 
     def new_insert(self, k):
-        el_nodo, idx = self.path_to(k)
+        existe, el_nodo, idx = self.path_to(k)
 
-        if idx >= 0:
-            # Si el indice es mayor o igual que cero, quiere decir que el elemento ya existe
+        if existe:
             # retorno el nodo donde deberia de haberse insertado y el valor de -1 para enfatizar esto.
             return el_nodo, -1
 
@@ -65,7 +67,7 @@ class BTree(object):
                 # Como tengo un nuevo padre, agrego el nodo objetivo como su primer hijo.
                 el_padre.hijos.append(el_nodo)
 
-            self._split_hoja(el_padre, len(el_padre.hijos)-1, k)
+            self._split_hoja(el_padre, idx, k)
 
             if len(el_padre.claves) == self.orden:
                 self._grow(el_padre)
@@ -243,36 +245,35 @@ class BTree(object):
         return output
 
 
-if __name__ == '__main__':
+def normalizar(palabra):
+    if sys.hexversion >= 0x3000000:
+        # On Python >= 3.0.0
+        output = remove_diacritic(palabra).decode()
+    else:
+        # On Python < 3.0.0
+        output = remove_diacritic(unicode(palabra, 'ISO-8859-1'))
 
+    return output.translate(str.maketrans('', '', string.punctuation))
+
+
+def remove_diacritic(input):
+    '''
+    Accept a unicode string, and return a normal string (bytes in Python 3)
+    without any diacritical marks.
+    '''
+    return unicodedata.normalize('NFKD', input).encode('ASCII', 'ignore')
+
+if __name__ == '__main__':
+    #print("".join(reversed(balloon)))
     myArbol = BTree(3)
-    mynodo = BTreeNode()
-    Key = 0
 
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad"
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para juegos"
-    palabras = "Bienvenidos al creador de palabras aleatorias en español con el puedes crear azar"
+    palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para" # juegos con niños, por ejemplo, una persona puede generar una palabra sin que otras la vean, hace un dibujo y las otras personas tienen que adivinar cuál es la palabra."
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para juegos con niños, por ejemplo, una persona puede generar una palabra sin que otras la vean, hace un dibujo y las otras personas tienen que adivinar cuál es la palabra."
-    print("insertando elementos....")
 
     for pal in palabras.split():
         #print("Insertando palabra [{}]".format(pal))
-        myArbol.new_insert(pal.lower())
-
-    # myArbol.insertar("cosa");
-    # myArbol.insertar("puerta");
-    # myArbol.insertar("sabroso");
-    # myArbol.insertar("abierto");
-    # myArbol.insertar("terraza");
-    # myArbol.insertar("delfin");
-    # myArbol.insertar("casa");
+        myArbol.new_insert( normalizar(pal.lower()) )
 
     print(myArbol)
-
-    # for bus in ["palabras", "sera"]:
-    #     print("\nbuscando elemento {}...\n", bus)
-    #     mynodo, Key = myArbol.buscar(bus)
-    #     if mynodo2 is None:
-    #         print("no encontro\n")
-    #     else:
-    #         print("encontro\n")
