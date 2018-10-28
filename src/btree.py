@@ -2,8 +2,8 @@ import sys
 import string
 import unicodedata
 import bisect
-import queue
 from collections import deque
+
 
 class BTreeNode(object):
 
@@ -13,13 +13,14 @@ class BTreeNode(object):
         self.hijos = []
         self.padre = None
 
+    def __eq__(self, other):
+        return self.claves == other.claves and self.hijos == other.hijos and self.padre == other.padre
+
     def __str__(self):
         if self.es_hoja:
             return "Leaf K:{0}".format(self.claves)
-            #return "Leaf {0} keys\n\tK:{1}\n\tC:{2}\n".format(len(self.keys), self.keys, self.c)
         else:
             return "Internal K:{0}".format(self.claves)
-            #return "Internal {0} keys, {1} children\n\tK:{2}\n\n".format(len(self.keys), len(self.c), self.keys, self.c)
 
 
 class BTree(object):
@@ -27,7 +28,7 @@ class BTree(object):
         self.root = BTreeNode(es_hoja=True)
         self.orden = orden
 
-    def path_to(self, k, el_nodo=None, idx_padre=0):
+    def _path_to(self, k, el_nodo=None, idx_padre=0):
         # Si especifico un nodo arranco a buscar desde ahi.
         if isinstance(el_nodo, BTreeNode):
             idx = 0
@@ -43,12 +44,12 @@ class BTree(object):
                 # Si recorrio todo el nodo y es una hoja, estoy en el nodo donde deberia ir la clave.
                 return False, el_nodo, idx_padre
             else:  # No lo encontre, y no es una hoja, entonces sigo mirando la rama correspondiente
-                return self.path_to(k, el_nodo.hijos[idx], idx)
+                return self._path_to(k, el_nodo.hijos[idx], idx)
         else:  # no node provided, search root of tree
-            return self.path_to(k, self.root, 0)
+            return self._path_to(k, self.root, 0)
 
-    def new_insert(self, k):
-        existe, el_nodo, idx = self.path_to(k)
+    def insert(self, k):
+        existe, el_nodo, idx = self._path_to(k)
 
         if existe:
             # retorno el nodo donde deberia de haberse insertado y el valor de -1 para enfatizar esto.
@@ -90,7 +91,15 @@ class BTree(object):
             # Como tengo un nuevo padre, agrego el nodo objetivo como su primer hijo.
             el_padre.hijos.append(rama)
 
-        self._split_interno(el_padre, len(el_padre.hijos) - 1)
+        # Buscamos el indice del nodo que corresponde al hijo.
+        idx_h = 0
+        for child in el_padre.hijos:
+            if child != rama:
+                idx_h += 1
+            else:
+                break
+
+        self._split_interno(el_padre, idx_h)
 
         if len(el_padre.claves) == self.orden:
             self._grow(el_padre)
@@ -115,11 +124,11 @@ class BTree(object):
         nodo_hijo.padre = padre
 
         if not nodo_hijo.es_hoja:
-
+            # Re-armo los hijos del hermando "derecho"
             nuevo_nodo.hijos = nodo_hijo.hijos[medio+1:]
             for hijo in nuevo_nodo.hijos:
                 hijo.padre = nuevo_nodo
-
+            # Re-armo los hijos del hermano "izquierdo" el que "se partio"
             nodo_hijo.hijos = nodo_hijo.hijos[0:medio+1]
             for hijo in nodo_hijo.hijos:
                 hijo.padre = nodo_hijo
@@ -145,84 +154,19 @@ class BTree(object):
         nodo_hijo.claves = nodo_hijo.claves[0:medio]
         nodo_hijo.padre = padre
 
-        if not nodo_hijo.es_hoja:
-            nuevo_nodo.hijos = nodo_hijo.hijos[medio:]
-            for hijo in nuevo_nodo.hijos:
-                hijo.padre = nuevo_nodo
-
-            nodo_hijo.hijos = nodo_hijo.hijos[0:medio]
-            for hijo in nodo_hijo.hijos:
-                hijo.padre = nodo_hijo
-
-    def _insert_nonfull(self, x, k):
-        i = len(x.claves) - 1
-        if x.es_hoja:
-            # insert a key
-            x.claves.append(0)
-            while i >= 0 and k < x.claves[i]:
-                x.claves[i + 1] = x.claves[i]
-                i -= 1
-            x.claves[i + 1] = k
-        else:
-            # insert a child
-            while i >= 0 and k < x.claves[i]:
-                i -= 1
-            i += 1
-            if len(x.c[i].claves) == self.orden - 1:
-                self._split_child(x, i)
-                if k > x.claves[i]:
-                    i += 1
-            self._insert_nonfull(x.c[i], k)
-
-    def search(self, k, x=None):
-
-        if isinstance(x, BTreeNode):
+    def search(self, key, el_nodo=None):
+        if isinstance(el_nodo, BTreeNode):
             i = 0
-            while i < len(x.claves) and k > x.claves[i]:  # look for index of k
+            while i < len(el_nodo.claves) and key > el_nodo.claves[i]:  # look for index of k
                 i += 1
-            if i < len(x.claves) and k == x.claves[i]:  # found exact match
-                return x, i
-            elif x.es_hoja:  # no match in keys, and is leaf ==> no match exists
+            if i < len(el_nodo.claves) and key == el_nodo.claves[i]:  # found exact match
+                return el_nodo, i
+            elif el_nodo.es_hoja:  # no match in keys, and is leaf ==> no match exists
                 return None, 0
             else:  # search children
-                return self.search(k, x.c[i])
+                return self.search(key, el_nodo.hijos[i])
         else:  # no node provided, search root of tree
-            return self.search(k, self.root)
-
-    def _split_child(self, nodo_padre, pos_hijo):
-        # Obtengo la posicion central (medio)
-        medio = (self.orden - 1)//2
-        # Nodo que quiero partir
-        nodo_hijo = nodo_padre.c[pos_hijo]
-        # Nuevo nodo (sibling) que sera hoja si el nodo a partir era hoja
-        nuevo_nodo = BTreeNode(es_hoja=nodo_hijo.es_hoja)
-
-        # Agrego el nodo "sibling" como hijo del padre
-        nodo_padre.hijos.insert(pos_hijo + 1, nuevo_nodo)
-        # Al partir el elemendo "medio" del nodo, pasa a ser la clave del padre.
-        nodo_padre.claves.insert(pos_hijo, nodo_hijo.claves[medio])
-
-        # El hermano derecho, se queda con los elementos "derechos"
-        nuevo_nodo.claves = nodo_hijo.claves[medio:]
-        # El hermano izquierdo, se queda con los elementos "izquierdo"
-        nodo_hijo.claves = nodo_hijo.claves[0:medio]
-
-        # children of z are t to 2t els of y.c
-        if not nodo_hijo.es_hoja:
-            nuevo_nodo.c = nodo_hijo.c[medio:]
-            nodo_hijo.c = nodo_hijo.c[0:medio]
-
-    def insert(self, k):
-        r = self.root
-
-        if len(r.claves) == self.orden - 1:  # keys are full, so we must split
-            s = BTreeNode()
-            self.root = s
-            s.hijos.insert(0, r)  # former root is now 0th child of new root s
-            self._split_child(s, 0)
-            self._insert_nonfull(s, k)
-        else:
-            self._insert_nonfull(r, k)
+            return self.search(key, self.root)
 
     def __str__(self):
         r = self.root
@@ -257,23 +201,29 @@ def normalizar(palabra):
 
 
 def remove_diacritic(input):
-    '''
-    Accept a unicode string, and return a normal string (bytes in Python 3)
-    without any diacritical marks.
-    '''
     return unicodedata.normalize('NFKD', input).encode('ASCII', 'ignore')
+
 
 if __name__ == '__main__':
     #print("".join(reversed(balloon)))
     myArbol = BTree(3)
+    resNodo = None
+    resIdx = 0
 
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad"
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para juegos"
-    palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para" # juegos con niños, por ejemplo, una persona puede generar una palabra sin que otras la vean, hace un dibujo y las otras personas tienen que adivinar cuál es la palabra."
+    palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para juegos con niños, por ejemplo, una persona puede generar una palabra sin que otras la vean, hace un dibujo y las otras personas tienen que adivinar cuál es la palabra."
     #palabras = "Bienvenidos al creador de palabras aleatorias en español, con él puedes crear palabras al azar para ejercicios de creatividad, memorización, etc. También puede servir para juegos con niños, por ejemplo, una persona puede generar una palabra sin que otras la vean, hace un dibujo y las otras personas tienen que adivinar cuál es la palabra."
 
     for pal in palabras.split():
-        #print("Insertando palabra [{}]".format(pal))
-        myArbol.new_insert( normalizar(pal.lower()) )
+        myArbol.insert( normalizar(pal.lower()) )
 
     print(myArbol)
+
+    resNodo, resIdx = myArbol.search("aleatorias")
+    print(resNodo)
+    print(resIdx)
+
+    resNodo, resIdx = myArbol.search("aleator")
+    print(resNodo)
+    print(resIdx)
